@@ -273,11 +273,8 @@ function cooline.label(text, offset, just)
     local fs = cooline.overlay:CreateFontString(nil, 'OVERLAY')
     -- Try custom font, fall back to default if it fails
     local font = cooline_theme.font
-    local success, errorMsg = fs:SetFont(font, cooline_theme.fontsize)
-    if success then
-        DEFAULT_CHAT_FRAME:AddMessage('|c00ffff00Cooline: Successfully loaded font ' .. font .. '|r')
-    else
-        DEFAULT_CHAT_FRAME:AddMessage('|c00ff0000Cooline: Failed to load font ' .. font .. '. Using fallback font: ' .. cooline_theme.fallback_font .. '. Error: ' .. (errorMsg or 'Unknown') .. '|r')
+    local success = fs:SetFont(font, cooline_theme.fontsize)
+    if not success then
         fs:SetFont(cooline_theme.fallback_font, cooline_theme.fontsize)
     end
     fs:SetTextColor(unpack(cooline_theme.fontcolor))
@@ -393,13 +390,64 @@ local function CreateConfig()
         -- Add value display
         local valueText = config:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         valueText:SetPoint("LEFT", slider, "RIGHT", 5, 0)
-        valueText:SetText(tostring(getFunc()))
+        local allowsDecimal = name == "Min Cooldown (seconds)" or name == "Active Alpha" or name == "Inactive Alpha"
+        valueText:SetText(string.format(allowsDecimal and "%.1f" or "%d", getFunc()))
 
+        -- Add input box
+        local inputBox = CreateFrame("EditBox", "CoolineConfigSliderInput_" .. slider_counter, config, "InputBoxTemplate")
+        inputBox:SetPoint("LEFT", valueText, "RIGHT", 5, 0)
+        inputBox:SetWidth(50)
+        inputBox:SetHeight(20)
+        inputBox:SetAutoFocus(false)
+        inputBox:SetText(string.format(allowsDecimal and "%.1f" or "%d", getFunc()))
+
+        -- Determine if negative values are allowed
+        local allowsNegative = name == "X Position" or name == "Y Position" or name == "Icon Size"
+
+        -- Sync slider and input box
         slider:SetScript("OnValueChanged", function()
-            setFunc(this:GetValue())
-            valueText:SetText(tostring(this:GetValue()))
+            local value = this:GetValue()
+            setFunc(value)
+            valueText:SetText(string.format(allowsDecimal and "%.1f" or "%d", value))
+            inputBox:SetText(string.format(allowsDecimal and "%.1f" or "%d", value))
             cooline:InitUI()
         end)
+
+        inputBox:SetScript("OnEnterPressed", function()
+            local text = this:GetText()
+            local value = tonumber(text)
+            if value then
+                -- Clamp value to min/max
+                value = math.max(minVal, math.min(maxVal, value))
+                -- Round to one decimal place for decimal sliders
+                if allowsDecimal then
+                    value = math.floor(value * 10 + 0.5) / 10
+                else
+                    value = math.floor(value + 0.5) -- Round to nearest integer
+                end
+                -- Ensure non-negative for sliders that don't allow negatives
+                if not allowsNegative and value < 0 then
+                    value = minVal
+                end
+                slider:SetValue(value)
+                setFunc(value)
+                valueText:SetText(string.format(allowsDecimal and "%.1f" or "%d", value))
+                this:SetText(string.format(allowsDecimal and "%.1f" or "%d", value))
+                cooline:InitUI()
+            else
+                -- Invalid input, revert to current value
+                local currentValue = getFunc()
+                this:SetText(string.format(allowsDecimal and "%.1f" or "%d", currentValue))
+            end
+            this:ClearFocus()
+        end)
+
+        inputBox:SetScript("OnEscapePressed", function()
+            local currentValue = getFunc()
+            this:SetText(string.format(allowsDecimal and "%.1f" or "%d", currentValue))
+            this:ClearFocus()
+        end)
+
         yOffset = yOffset - 35
         return slider
     end
@@ -481,7 +529,7 @@ local function CreateConfig()
         cooline_settings.ignore_list = cooline_ignore_list
         ignoreEdit:SetText("")
         config.currentIgnoredText:SetText(table.concat(cooline_ignore_list, ", "))
-        cooline.detect_cooldowns()  -- Refresh to apply ignores
+        cooline.detect_cooldowns()
     end)
 
     local unignoreButton = CreateFrame("Button", nil, config, "UIPanelButtonTemplate")
@@ -515,7 +563,7 @@ local function CreateConfig()
         cooline_settings.ignore_list = cooline_ignore_list
         ignoreEdit:SetText("")
         config.currentIgnoredText:SetText(table.concat(cooline_ignore_list, ", "))
-        cooline.detect_cooldowns()  -- Refresh to apply ignores
+        cooline.detect_cooldowns()
     end)
 
     yOffset = yOffset - 30
@@ -710,8 +758,6 @@ function cooline.VARIABLES_LOADED()
     minimapButton:SetScript("OnLeave", function()
         GameTooltip:Hide()
     end)
-
-    DEFAULT_CHAT_FRAME:AddMessage('|c00ffff00Cooline loaded. Use /cooline config to customize or /cooline reset to reset position.|r')
 end
 
 SLASH_COOLINE1 = "/cooline"
@@ -721,8 +767,6 @@ SlashCmdList["COOLINE"] = function(msg)
             CoolineConfig:Hide()
         elseif CoolineConfig then
             CoolineConfig:Show()
-        else
-            DEFAULT_CHAT_FRAME:AddMessage('|c00ff0000Cooline: Config frame not available!|r')
         end
     elseif msg == "reset" then
         cooline_settings.x = default_settings.x
@@ -734,7 +778,6 @@ SlashCmdList["COOLINE"] = function(msg)
         cooline:ClearAllPoints()
         cooline:SetPoint("CENTER", cooline_settings.x, cooline_settings.y)
         cooline:InitUI()
-        DEFAULT_CHAT_FRAME:AddMessage('|c00ffff00Cooline: Cooldown bar position reset to (' .. cooline_settings.x .. ', ' .. cooline_settings.y .. ')|r')
     end
 end
 
