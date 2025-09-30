@@ -214,59 +214,64 @@ do
     local last_update, last_relevel = GetTime(), GetTime()
     
     function cooline.on_update(force)
-        if not cooline_theme then return end -- Skip if theme not initialized
-        if GetTime() - last_update < throt and not force then return end
-        last_update = GetTime()
+    if not cooline_theme then return end -- Skip if theme not initialized
+    if GetTime() - last_update < throt and not force then return end
+    last_update = GetTime()
 
-        relevel = false
-        if GetTime() - last_relevel > 0.4 then
-            relevel, last_relevel = true, GetTime()
-        end
-
-        local hasActiveCooldowns = false
-        throt = 1.5
-        
-        -- Process all cooldowns
-        for name, frame in pairs(cooldowns) do
-            local time_left = frame.end_time - GetTime()
-
-            if time_left > 0 then
-                hasActiveCooldowns = true
-                frame:Show()
-            else
-                frame:Hide()
-                if time_left < -1 then
-                    throt = min(throt, 0.2)
-                    cooline.clear_cooldown(name)
-                elseif time_left < 0 then
-                    cooline.update_cooldown(name, frame, 0, 0, relevel)
-                    frame:SetAlpha(1 + time_left)
-                end
-            end
-
-            -- Position updates for active cooldowns
-            if time_left > 0 then
-                if time_left < 0.3 then
-                    local size = cooline.icon_size * (0.5 - time_left) * 3
-                    frame:SetWidth(size)
-                    frame:SetHeight(size)
-                    cooline.update_cooldown(name, frame, cooline.section * time_left, 0, relevel)
-                elseif time_left < 1 then
-                    cooline.update_cooldown(name, frame, cooline.section * time_left, 0, relevel)
-                elseif time_left < 3 then
-                    cooline.update_cooldown(name, frame, cooline.section * (time_left + 1) * 0.5, 0.02, relevel)
-                elseif time_left < 10 then
-                    cooline.update_cooldown(name, frame, cooline.section * (time_left + 11) * 0.14286, time_left > 4 and 0.05 or 0.02, relevel)
-                elseif time_left < 30 then
-                    cooline.update_cooldown(name, frame, cooline.section * (time_left + 50) * 0.05, 0.06, relevel)
-                end
-            end
-        end
-        
-        -- Show bar only in combat with active cooldowns
-        local shouldShow = inCombat and (hasActiveCooldowns or hasShownInCombat)
-        cooline:SetAlpha(shouldShow and cooline_theme.activealpha or cooline_theme.inactivealpha)
+    relevel = false
+    if GetTime() - last_relevel > 0.4 then
+        relevel, last_relevel = true, GetTime()
     end
+
+    local hasActiveCooldowns = false
+    throt = 1.5
+    
+    -- Process all cooldowns
+    for name, frame in pairs(cooldowns) do
+        local time_left = frame.end_time - GetTime()
+
+        if time_left > 0 then
+            hasActiveCooldowns = true
+            frame:Show()
+        else
+            frame:Hide()
+            if time_left < -1 then
+                throt = min(throt, 0.2)
+                cooline.clear_cooldown(name)
+            elseif time_left < 0 then
+                cooline.update_cooldown(name, frame, 0, 0, relevel)
+                frame:SetAlpha(1 + time_left)
+            end
+        end
+
+        -- Position updates for active cooldowns
+        if time_left > 0 then
+            if time_left < 0.3 then
+                local size = cooline.icon_size * (0.5 - time_left) * 3
+                frame:SetWidth(size)
+                frame:SetHeight(size)
+                cooline.update_cooldown(name, frame, cooline.section * time_left, 0, relevel)
+            elseif time_left < 1 then
+                cooline.update_cooldown(name, frame, cooline.section * time_left, 0, relevel)
+            elseif time_left < 3 then
+                cooline.update_cooldown(name, frame, cooline.section * (time_left + 1) * 0.5, 0.02, relevel)
+            elseif time_left < 10 then
+                cooline.update_cooldown(name, frame, cooline.section * (time_left + 11) * 0.14286, time_left > 4 and 0.05 or 0.02, relevel)
+            elseif time_left < 30 then
+                cooline.update_cooldown(name, frame, cooline.section * (time_left + 50) * 0.05, 0.06, relevel)
+            end
+        end
+    end
+    
+    -- Update hasShownInCombat if there are active cooldowns
+    if hasActiveCooldowns then
+        hasShownInCombat = true
+    end
+
+    -- Show bar only in combat with active cooldowns or if it has been shown
+    local shouldShow = inCombat and (hasActiveCooldowns or hasShownInCombat)
+    cooline:SetAlpha(shouldShow and cooline_theme.activealpha or cooline_theme.inactivealpha)
+end
 end
 
 function cooline.label(text, offset, just)
