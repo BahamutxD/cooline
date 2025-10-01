@@ -213,7 +213,7 @@ end
 do
     local last_update, last_relevel = GetTime(), GetTime()
     
-    function cooline.on_update(force)
+    function cooline.on_update(level)
     if not cooline_theme then return end -- Skip if theme not initialized
     if GetTime() - last_update < throt and not force then return end
     last_update = GetTime()
@@ -720,6 +720,13 @@ function cooline.VARIABLES_LOADED()
     icon:SetTexture("Interface\\Icons\\INV_Misc_PocketWatch_01")
     icon:SetPoint("CENTER", 0, 0)
     icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
+
+    -- Add border texture
+    local border = minimapButton:CreateTexture(nil, "BORDER")
+    border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+    border:SetPoint("CENTER", 11, -12)
+    border:SetWidth(54)
+    border:SetHeight(54)
 
     local function UpdateMinimapPosition()
         local angle = math.rad(cooline_settings.minimapPos)
