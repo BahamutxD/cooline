@@ -19,11 +19,11 @@ local default_settings = {
         fallback_font = "Fonts\\FRIZQT__.TTF", -- Fallback to standard WoW font
         fontsize = 12,
         fontcolor = {1,1,1,1},
-        bgcolor = {0,0,0,0}, -- Transparent background
-        statusbar = "Interface\\TargetingFrame\\UI-StatusBar",
+        bgcolor = {0,0,0,0.5}, 
+        statusbar = [[Interface\TargetingFrame\UI-StatusBar]],
         iconoutset = 0,
         activealpha = 1,
-        inactivealpha = 0,
+        inactivealpha = 0.5,
     },
 }
 
@@ -259,6 +259,11 @@ do
                 cooline.update_cooldown(name, frame, cooline.section * (time_left + 11) * 0.14286, time_left > 4 and 0.05 or 0.02, relevel)
             elseif time_left < 30 then
                 cooline.update_cooldown(name, frame, cooline.section * (time_left + 50) * 0.05, 0.06, relevel)
+            elseif time_left < 120 then
+                cooline.update_cooldown(name, frame, cooline.section * (time_left + 330) * 0.011111, 0.18, relevel)  -- 4 + (time_left - 30) / 90
+            elseif time_left < 360 then
+                cooline.update_cooldown(name, frame, cooline.section * (time_left + 1080) * 0.0041667, 1.2, relevel)  -- 5 + (time_left - 120) / 240
+                frame:SetAlpha(cooline_theme.activealpha)
             end
         end
     end
@@ -318,12 +323,20 @@ function cooline:InitUI()
     self:SetPoint('CENTER', x, y)
     self:SetClampedToScreen(true)
     
-    self.bg:SetTexture(nil) -- Remove background texture entirely
-    self.bg:SetAlpha(0) -- Extra transparency fallback
-    self.bg:SetVertexColor(unpack(cooline_theme.bgcolor))
-    self.bg:SetTexCoord(0, 1, 0, 1)
+    cooline.bg:SetTexture(cooline_theme.statusbar)
+	cooline.bg:SetVertexColor(unpack(cooline_theme.bgcolor))
+    cooline.bg:SetTexCoord(0, 1, 0, 1)
 
-    self.section = cooline_theme.width / 4
+    local sectionCount = 4
+    if cooline_settings.max_cooldown >= 120 then
+        sectionCount = sectionCount + 1
+    end
+    
+    if cooline_settings.max_cooldown >= 360 then
+        sectionCount = sectionCount + 1
+    end   
+    
+    self.section = cooline_theme.width / sectionCount
     self.icon_size = cooline_theme.height + cooline_theme.iconoutset * 2
     self.place = cooline_theme.reverse and place_HR or place_H
 
@@ -333,12 +346,22 @@ function cooline:InitUI()
     if self.tick3 then self.tick3:Hide() end
     if self.tick10 then self.tick10:Hide() end
     if self.tick30 then self.tick30:Hide() end
+    if self.tick120 then self.tick120:Hide() end
+    if self.tick300 then self.tick300:Hide() end
 
     self.tick0 = self.label('0', 0, 'LEFT')
     self.tick1 = self.label('1', self.section)
     self.tick3 = self.label('3', self.section * 2)
     self.tick10 = self.label('10', self.section * 3)
-    self.tick30 = self.label('30', self.section * 4, 'RIGHT')
+    self.tick30 = self.label('30', self.section * 4)
+    
+    if cooline_settings.max_cooldown >= 120 then
+        self.tick120 = cooline.label('2m', cooline.section * 5)
+    end
+    
+    if cooline_settings.max_cooldown >= 360 then
+        self.tick300 = cooline.label('6m', cooline.section * 6, 'RIGHT')
+    end    
     
     -- Force update to apply changes
     self.detect_cooldowns()
@@ -603,9 +626,9 @@ function cooline.VARIABLES_LOADED()
                 for tk, tv in pairs(v) do
                     -- Skip font to prevent it from being saved
                     if k == "theme" and tk == "font" then
-                        cooline_theme.font = default_settings.theme.font
+                        cooline_settings.theme.font = default_settings.theme.font
                     elseif k == "theme" and tk == "fallback_font" then
-                        cooline_theme.fallback_font = default_settings.theme.fallback_font
+                        cooline_settings.theme.fallback_font = default_settings.theme.fallback_font
                     else
                         cooline_settings[k][tk] = tv
                     end
@@ -623,9 +646,9 @@ function cooline.VARIABLES_LOADED()
                     for tk, tv in pairs(v) do
                         -- Skip font to prevent it from being saved
                         if k == "theme" and tk == "font" then
-                            cooline_theme.font = default_settings.theme.font
+                            cooline_settings.theme.font = default_settings.theme.font
                         elseif k == "theme" and tk == "fallback_font" then
-                            cooline_theme.fallback_font = default_settings.theme.fallback_font
+                            cooline_settings.theme.fallback_font = default_settings.theme.fallback_font
                         else
                             cooline_settings[k][tk] = tv
                         end
