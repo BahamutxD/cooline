@@ -328,7 +328,16 @@ function cooline:InitUI()
     self.bg:SetVertexColor(unpack(cooline_theme.bgcolor))
     self.bg:SetTexCoord(0, 1, 0, 1)
 
-    self.section = cooline_theme.width / 6
+    local sectionCount = 4
+    if cooline_settings.max_cooldown >= 120 then
+        sectionCount = sectionCount + 1
+    end
+    
+    if cooline_settings.max_cooldown >= 360 then
+        sectionCount = sectionCount + 1
+    end   
+    
+    self.section = cooline_theme.width / sectionCount
     self.icon_size = cooline_theme.height + cooline_theme.iconoutset * 2
     self.place = cooline_theme.reverse and place_HR or place_H
 
@@ -346,8 +355,14 @@ function cooline:InitUI()
     self.tick3 = self.label('3', self.section * 2)
     self.tick10 = self.label('10', self.section * 3)
     self.tick30 = self.label('30', self.section * 4)
-    self.tick120 = cooline.label('2m', cooline.section * 5)
-    self.tick300 = cooline.label('6m', cooline.section * 6, 'RIGHT')
+    
+    if cooline_settings.max_cooldown >= 120 then
+        self.tick120 = cooline.label('2m', cooline.section * 5)
+    end
+    
+    if cooline_settings.max_cooldown >= 360 then
+        self.tick300 = cooline.label('6m', cooline.section * 6, 'RIGHT')
+    end    
     
     -- Force update to apply changes
     self.detect_cooldowns()
