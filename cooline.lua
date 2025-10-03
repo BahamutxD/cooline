@@ -259,6 +259,11 @@ do
                 cooline.update_cooldown(name, frame, cooline.section * (time_left + 11) * 0.14286, time_left > 4 and 0.05 or 0.02, relevel)
             elseif time_left < 30 then
                 cooline.update_cooldown(name, frame, cooline.section * (time_left + 50) * 0.05, 0.06, relevel)
+            elseif time_left < 120 then
+                cooline.update_cooldown(name, frame, cooline.section * (time_left + 330) * 0.011111, 0.18, relevel)  -- 4 + (time_left - 30) / 90
+            elseif time_left < 360 then
+                cooline.update_cooldown(name, frame, cooline.section * (time_left + 1080) * 0.0041667, 1.2, relevel)  -- 5 + (time_left - 120) / 240
+                frame:SetAlpha(cooline_theme.activealpha)
             end
         end
     end
@@ -323,7 +328,7 @@ function cooline:InitUI()
     self.bg:SetVertexColor(unpack(cooline_theme.bgcolor))
     self.bg:SetTexCoord(0, 1, 0, 1)
 
-    self.section = cooline_theme.width / 4
+    self.section = cooline_theme.width / 6
     self.icon_size = cooline_theme.height + cooline_theme.iconoutset * 2
     self.place = cooline_theme.reverse and place_HR or place_H
 
@@ -333,12 +338,16 @@ function cooline:InitUI()
     if self.tick3 then self.tick3:Hide() end
     if self.tick10 then self.tick10:Hide() end
     if self.tick30 then self.tick30:Hide() end
+    if self.tick120 then self.tick120:Hide() end
+    if self.tick300 then self.tick300:Hide() end
 
     self.tick0 = self.label('0', 0, 'LEFT')
     self.tick1 = self.label('1', self.section)
     self.tick3 = self.label('3', self.section * 2)
     self.tick10 = self.label('10', self.section * 3)
-    self.tick30 = self.label('30', self.section * 4, 'RIGHT')
+    self.tick30 = self.label('30', self.section * 4)
+    self.tick120 = cooline.label('2m', cooline.section * 5)
+    self.tick300 = cooline.label('6m', cooline.section * 6, 'RIGHT')
     
     -- Force update to apply changes
     self.detect_cooldowns()
