@@ -19,11 +19,11 @@ local default_settings = {
         fallback_font = "Fonts\\FRIZQT__.TTF", -- Fallback to standard WoW font
         fontsize = 12,
         fontcolor = {1,1,1,1},
-        bgcolor = {0,0,0,0}, -- Transparent background
-        statusbar = "Interface\\TargetingFrame\\UI-StatusBar",
+        bgcolor = {0,0,0,0.5}, 
+        statusbar = [[Interface\TargetingFrame\UI-StatusBar]],
         iconoutset = 0,
         activealpha = 1,
-        inactivealpha = 0,
+        inactivealpha = 0.5,
     },
 }
 
