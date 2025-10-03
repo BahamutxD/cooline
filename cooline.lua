@@ -323,10 +323,9 @@ function cooline:InitUI()
     self:SetPoint('CENTER', x, y)
     self:SetClampedToScreen(true)
     
-    self.bg:SetTexture(nil) -- Remove background texture entirely
-    self.bg:SetAlpha(0) -- Extra transparency fallback
-    self.bg:SetVertexColor(unpack(cooline_theme.bgcolor))
-    self.bg:SetTexCoord(0, 1, 0, 1)
+    cooline.bg:SetTexture(cooline_theme.statusbar)
+	cooline.bg:SetVertexColor(unpack(cooline_theme.bgcolor))
+    cooline.bg:SetTexCoord(0, 1, 0, 1)
 
     local sectionCount = 4
     if cooline_settings.max_cooldown >= 120 then
