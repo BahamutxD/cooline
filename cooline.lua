@@ -627,9 +627,9 @@ function cooline.VARIABLES_LOADED()
                 for tk, tv in pairs(v) do
                     -- Skip font to prevent it from being saved
                     if k == "theme" and tk == "font" then
-                        cooline_theme.font = default_settings.theme.font
+                        cooline_settings.theme.font = default_settings.theme.font
                     elseif k == "theme" and tk == "fallback_font" then
-                        cooline_theme.fallback_font = default_settings.theme.fallback_font
+                        cooline_settings.theme.fallback_font = default_settings.theme.fallback_font
                     else
                         cooline_settings[k][tk] = tv
                     end
@@ -647,9 +647,9 @@ function cooline.VARIABLES_LOADED()
                     for tk, tv in pairs(v) do
                         -- Skip font to prevent it from being saved
                         if k == "theme" and tk == "font" then
-                            cooline_theme.font = default_settings.theme.font
+                            cooline_settings.theme.font = default_settings.theme.font
                         elseif k == "theme" and tk == "fallback_font" then
-                            cooline_theme.fallback_font = default_settings.theme.fallback_font
+                            cooline_settings.theme.fallback_font = default_settings.theme.fallback_font
                         else
                             cooline_settings[k][tk] = tv
                         end
