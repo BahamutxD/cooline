@@ -85,7 +85,12 @@ function cooline.detect_cooldowns()
         frame:SetBackdropColor(0, 0, 0, 1) -- Black border for all icons
         frame:SetAlpha((end_time - GetTime() > cooline_max_cooldown) and 0.6 or 1)
         frame.end_time = end_time
-        frame:Show()
+        -- Only show frame if in combat
+        if inCombat then
+            frame:Show()
+        else
+            frame:Hide()
+        end
     end
 
     -- Spell cooldowns
@@ -259,7 +264,11 @@ do
 
             if time_left > 0 then
                 hasActiveCooldowns = true
-                frame:Show()
+                if inCombat then
+                    frame:Show()
+                else
+                    frame:Hide()
+                end
             else
                 frame:Hide()
                 if time_left < -1 then
@@ -272,7 +281,7 @@ do
             end
 
             -- Position updates for active cooldowns
-            if time_left > 0 then
+            if time_left > 0 and inCombat then
                 if time_left < 0.3 then
                     local size = cooline.icon_size * (0.5 - time_left) * 3
                     frame:SetWidth(size)
@@ -295,8 +304,8 @@ do
             hasShownInCombat = true
         end
 
-        -- Show bar only in combat with active cooldowns or if it has been shown
-        local shouldShow = inCombat and (hasActiveCooldowns or hasShownInCombat)
+        -- Show bar only in combat with active cooldowns
+        local shouldShow = inCombat and hasActiveCooldowns
         cooline:SetAlpha(shouldShow and cooline_theme.activealpha or cooline_theme.inactivealpha)
     end
 end
