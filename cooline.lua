@@ -14,12 +14,15 @@ local default_settings = {
     theme = {
         width = 300,
         height = 20,
+        background_width = 300, -- Default background width
+        background_height = 20, -- Default background height
         reverse = false,
         font = "Interface\\AddOns\\cooline\\assets\\Expressway.ttf",
         fallback_font = "Fonts\\FRIZQT__.TTF", -- Fallback to standard WoW font
         fontsize = 12,
         fontcolor = {1,1,1,1},
-        bgcolor = {0,0,0,0}, -- Transparent background
+        bgcolor = {0,0,0}, -- Background color (RGB only)
+        background_alpha = 0.5, -- Separate background alpha
         statusbar = "Interface\\TargetingFrame\\UI-StatusBar",
         iconoutset = 0,
         activealpha = 1,
@@ -41,12 +44,21 @@ local slider_counter = 0 -- Counter for unique slider names
 local check_counter = 0 -- Counter for unique check button names
 
 function cooline.hyperlink_name(hyperlink)
+    if not hyperlink or type(hyperlink) ~= "string" then
+        return nil
+    end
     local _, _, name = strfind(hyperlink, '|Hitem:%d+:%d+:%d+:%d+|h[[]([^]]+)[]]|h')
+    if not name then
+        return nil
+    end
     return name
 end
 
 function cooline.detect_cooldowns()
     function start_cooldown(name, texture, start_time, duration)
+        if type(name) ~= "string" then
+            return
+        end
         if duration > cooline_max_cooldown or duration < cooline_min_cooldown then
             return -- Skip cooldowns outside min/max range
         end
@@ -82,35 +94,47 @@ function cooline.detect_cooldowns()
     for id = 1, total_spells do
         local start_time, duration, enabled = GetSpellCooldown(id, BOOKTYPE_SPELL)
         local name = GetSpellName(id, BOOKTYPE_SPELL)
-        if enabled == 1 and duration > cooline_min_cooldown then
+        if name and enabled == 1 and duration > cooline_min_cooldown then
             start_cooldown(
                 name,
                 GetSpellTexture(id, BOOKTYPE_SPELL),
                 start_time,
                 duration
             )
-        elseif duration == 0 then
+        elseif duration == 0 and name then
             cooline.clear_cooldown(name)
         end
     end
 
     -- Bag item cooldowns
     for bag = 0, 4 do
-        for slot = 1, GetContainerNumSlots(bag) do
-            local start_time, duration, enabled = GetContainerItemCooldown(bag, slot)
-            local texture = GetContainerItemInfo(bag, slot)
-            local link = GetContainerItemLink(bag, slot)
-            if link then
-                local name = cooline.hyperlink_name(link)
-                if enabled == 1 and duration > cooline_min_cooldown then
-                    start_cooldown(
-                        name,
-                        texture,
-                        start_time,
-                        duration
-                    )
-                elseif duration == 0 then
-                    cooline.clear_cooldown(name)
+        local numSlots = GetContainerNumSlots(bag)
+        if numSlots > 0 then
+            for slot = 1, numSlots do
+                local start_time, duration, enabled = GetContainerItemCooldown(bag, slot)
+                local texture
+                -- Handle different API versions
+                if C_Container and C_Container.GetContainerItemInfo then
+                    -- Retail WoW: GetContainerItemInfo returns a table
+                    local itemInfo = C_Container.GetContainerItemInfo(bag, slot)
+                    texture = itemInfo and itemInfo.iconFileID
+                else
+                    -- Classic WoW: GetContainerItemInfo returns texture as first value
+                    texture = GetContainerItemInfo(bag, slot)
+                end
+                local link = GetContainerItemLink(bag, slot)
+                if link and texture then
+                    local name = cooline.hyperlink_name(link)
+                    if name and enabled == 1 and duration > cooline_min_cooldown then
+                        start_cooldown(
+                            name,
+                            texture,
+                            start_time,
+                            duration
+                        )
+                    elseif name and duration == 0 then
+                        cooline.clear_cooldown(name)
+                    end
                 end
             end
         end
@@ -121,16 +145,16 @@ function cooline.detect_cooldowns()
         local start_time, duration, enabled = GetInventoryItemCooldown("player", slot)
         local texture = GetInventoryItemTexture("player", slot)
         local link = GetInventoryItemLink("player", slot)
-        if link then
+        if link and texture then
             local name = cooline.hyperlink_name(link)
-            if enabled == 1 and duration > cooline_min_cooldown then
+            if name and enabled == 1 and duration > cooline_min_cooldown then
                 start_cooldown(
                     name,
                     texture,
                     start_time,
                     duration
                 )
-            elseif duration == 0 then
+            elseif name and duration == 0 then
                 cooline.clear_cooldown(name)
             end
         end
@@ -192,6 +216,9 @@ function getKeysSortedByValue(tbl, sortFunction)
 end
 
 function cooline.update_cooldown(name, frame, position, tthrot, relevel)
+    if type(name) ~= "string" then
+        return
+    end
     throt = min(throt, tthrot)
     
     if frame.end_time - GetTime() < 3 then
@@ -214,64 +241,64 @@ do
     local last_update, last_relevel = GetTime(), GetTime()
     
     function cooline.on_update(level)
-    if not cooline_theme then return end -- Skip if theme not initialized
-    if GetTime() - last_update < throt and not force then return end
-    last_update = GetTime()
+        if not cooline_theme then return end -- Skip if theme not initialized
+        if GetTime() - last_update < throt and not level then return end
+        last_update = GetTime()
 
-    relevel = false
-    if GetTime() - last_relevel > 0.4 then
-        relevel, last_relevel = true, GetTime()
-    end
-
-    local hasActiveCooldowns = false
-    throt = 1.5
-    
-    -- Process all cooldowns
-    for name, frame in pairs(cooldowns) do
-        local time_left = frame.end_time - GetTime()
-
-        if time_left > 0 then
-            hasActiveCooldowns = true
-            frame:Show()
-        else
-            frame:Hide()
-            if time_left < -1 then
-                throt = min(throt, 0.2)
-                cooline.clear_cooldown(name)
-            elseif time_left < 0 then
-                cooline.update_cooldown(name, frame, 0, 0, relevel)
-                frame:SetAlpha(1 + time_left)
-            end
+        relevel = false
+        if GetTime() - last_relevel > 0.4 then
+            relevel, last_relevel = true, GetTime()
         end
 
-        -- Position updates for active cooldowns
-        if time_left > 0 then
-            if time_left < 0.3 then
-                local size = cooline.icon_size * (0.5 - time_left) * 3
-                frame:SetWidth(size)
-                frame:SetHeight(size)
-                cooline.update_cooldown(name, frame, cooline.section * time_left, 0, relevel)
-            elseif time_left < 1 then
-                cooline.update_cooldown(name, frame, cooline.section * time_left, 0, relevel)
-            elseif time_left < 3 then
-                cooline.update_cooldown(name, frame, cooline.section * (time_left + 1) * 0.5, 0.02, relevel)
-            elseif time_left < 10 then
-                cooline.update_cooldown(name, frame, cooline.section * (time_left + 11) * 0.14286, time_left > 4 and 0.05 or 0.02, relevel)
-            elseif time_left < 30 then
-                cooline.update_cooldown(name, frame, cooline.section * (time_left + 50) * 0.05, 0.06, relevel)
+        local hasActiveCooldowns = false
+        throt = 1.5
+        
+        -- Process all cooldowns
+        for name, frame in pairs(cooldowns) do
+            local time_left = frame.end_time - GetTime()
+
+            if time_left > 0 then
+                hasActiveCooldowns = true
+                frame:Show()
+            else
+                frame:Hide()
+                if time_left < -1 then
+                    throt = min(throt, 0.2)
+                    cooline.clear_cooldown(name)
+                elseif time_left < 0 then
+                    cooline.update_cooldown(name, frame, 0, 0, relevel)
+                    frame:SetAlpha(1 + time_left)
+                end
+            end
+
+            -- Position updates for active cooldowns
+            if time_left > 0 then
+                if time_left < 0.3 then
+                    local size = cooline.icon_size * (0.5 - time_left) * 3
+                    frame:SetWidth(size)
+                    frame:SetHeight(size)
+                    cooline.update_cooldown(name, frame, cooline.section * time_left, 0, relevel)
+                elseif time_left < 1 then
+                    cooline.update_cooldown(name, frame, cooline.section * time_left, 0, relevel)
+                elseif time_left < 3 then
+                    cooline.update_cooldown(name, frame, cooline.section * (time_left + 1) * 0.5, 0.02, relevel)
+                elseif time_left < 10 then
+                    cooline.update_cooldown(name, frame, cooline.section * (time_left + 11) * 0.14286, time_left > 4 and 0.05 or 0.02, relevel)
+                elseif time_left < 30 then
+                    cooline.update_cooldown(name, frame, cooline.section * (time_left + 50) * 0.05, 0.06, relevel)
+                end
             end
         end
-    end
-    
-    -- Update hasShownInCombat if there are active cooldowns
-    if hasActiveCooldowns then
-        hasShownInCombat = true
-    end
+        
+        -- Update hasShownInCombat if there are active cooldowns
+        if hasActiveCooldowns then
+            hasShownInCombat = true
+        end
 
-    -- Show bar only in combat with active cooldowns or if it has been shown
-    local shouldShow = inCombat and (hasActiveCooldowns or hasShownInCombat)
-    cooline:SetAlpha(shouldShow and cooline_theme.activealpha or cooline_theme.inactivealpha)
-end
+        -- Show bar only in combat with active cooldowns or if it has been shown
+        local shouldShow = inCombat and (hasActiveCooldowns or hasShownInCombat)
+        cooline:SetAlpha(shouldShow and cooline_theme.activealpha or cooline_theme.inactivealpha)
+    end
 end
 
 function cooline.label(text, offset, just)
@@ -323,6 +350,27 @@ function cooline:InitUI()
     self.bg:SetVertexColor(unpack(cooline_theme.bgcolor))
     self.bg:SetTexCoord(0, 1, 0, 1)
 
+    -- Create a dedicated background frame
+    if not self.background then
+        self.background = CreateFrame('Frame', nil, self)
+        self.background:SetFrameStrata('BACKGROUND')
+        self.background:SetPoint('CENTER', self, 'CENTER')
+        self.background:SetWidth(cooline_theme.background_width or default_settings.theme.background_width)
+        self.background:SetHeight(cooline_theme.background_height or default_settings.theme.background_height)
+        local texture = self.background:CreateTexture(nil, 'BACKGROUND')
+        texture:SetAllPoints(self.background)
+        texture:SetTexture(1, 1, 1) -- Set a solid white texture
+        texture:SetVertexColor(unpack(cooline_theme.bgcolor)) -- Apply the color
+        texture:SetAlpha(cooline_theme.background_alpha or default_settings.theme.background_alpha)
+        self.background.texture = texture
+    else
+        self.background:SetWidth(cooline_theme.background_width or default_settings.theme.background_width)
+        self.background:SetHeight(cooline_theme.background_height or default_settings.theme.background_height)
+        self.background.texture:SetTexture(1, 1, 1) -- Ensure texture is set
+        self.background.texture:SetVertexColor(unpack(cooline_theme.bgcolor))
+        self.background.texture:SetAlpha(cooline_theme.background_alpha or default_settings.theme.background_alpha)
+    end
+
     self.section = cooline_theme.width / 4
     self.icon_size = cooline_theme.height + cooline_theme.iconoutset * 2
     self.place = cooline_theme.reverse and place_HR or place_H
@@ -350,8 +398,8 @@ local function CreateConfig()
         return
     end
 
-    config:SetWidth(400)
-    config:SetHeight(600)
+    config:SetWidth(450)
+    config:SetHeight(700)
     config:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     config:SetBackdrop({
         bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -395,8 +443,8 @@ local function CreateConfig()
         -- Add value display
         local valueText = config:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         valueText:SetPoint("LEFT", slider, "RIGHT", 5, 0)
-        local allowsDecimal = name == "Min Cooldown (seconds)" or name == "Active Alpha" or name == "Inactive Alpha"
-        valueText:SetText(string.format(allowsDecimal and "%.1f" or "%d", getFunc()))
+        local allowsDecimal = name == "Min Cooldown (seconds)" or name == "Active Alpha" or name == "Inactive Alpha" or name == "Background Alpha"
+        valueText:SetText(string.format(allowsDecimal and "%.2f" or "%d", getFunc()))
 
         -- Add input box
         local inputBox = CreateFrame("EditBox", "CoolineConfigSliderInput_" .. slider_counter, config, "InputBoxTemplate")
@@ -404,7 +452,7 @@ local function CreateConfig()
         inputBox:SetWidth(50)
         inputBox:SetHeight(20)
         inputBox:SetAutoFocus(false)
-        inputBox:SetText(string.format(allowsDecimal and "%.1f" or "%d", getFunc()))
+        inputBox:SetText(string.format(allowsDecimal and "%.2f" or "%d", getFunc()))
 
         -- Determine if negative values are allowed
         local allowsNegative = name == "X Position" or name == "Y Position" or name == "Icon Size"
@@ -413,8 +461,8 @@ local function CreateConfig()
         slider:SetScript("OnValueChanged", function()
             local value = this:GetValue()
             setFunc(value)
-            valueText:SetText(string.format(allowsDecimal and "%.1f" or "%d", value))
-            inputBox:SetText(string.format(allowsDecimal and "%.1f" or "%d", value))
+            valueText:SetText(string.format(allowsDecimal and "%.2f" or "%d", value))
+            inputBox:SetText(string.format(allowsDecimal and "%.2f" or "%d", value))
             cooline:InitUI()
         end)
 
@@ -424,9 +472,9 @@ local function CreateConfig()
             if value then
                 -- Clamp value to min/max
                 value = math.max(minVal, math.min(maxVal, value))
-                -- Round to one decimal place for decimal sliders
+                -- Round to two decimal places for decimal sliders
                 if allowsDecimal then
-                    value = math.floor(value * 10 + 0.5) / 10
+                    value = math.floor(value * 100 + 0.5) / 100
                 else
                     value = math.floor(value + 0.5) -- Round to nearest integer
                 end
@@ -436,20 +484,20 @@ local function CreateConfig()
                 end
                 slider:SetValue(value)
                 setFunc(value)
-                valueText:SetText(string.format(allowsDecimal and "%.1f" or "%d", value))
-                this:SetText(string.format(allowsDecimal and "%.1f" or "%d", value))
+                valueText:SetText(string.format(allowsDecimal and "%.2f" or "%d", value))
+                this:SetText(string.format(allowsDecimal and "%.2f" or "%d", value))
                 cooline:InitUI()
             else
                 -- Invalid input, revert to current value
                 local currentValue = getFunc()
-                this:SetText(string.format(allowsDecimal and "%.1f" or "%d", currentValue))
+                this:SetText(string.format(allowsDecimal and "%.2f" or "%d", currentValue))
             end
             this:ClearFocus()
         end)
 
         inputBox:SetScript("OnEscapePressed", function()
             local currentValue = getFunc()
-            this:SetText(string.format(allowsDecimal and "%.1f" or "%d", currentValue))
+            this:SetText(string.format(allowsDecimal and "%.2f" or "%d", currentValue))
             this:ClearFocus()
         end)
 
@@ -477,6 +525,8 @@ local function CreateConfig()
 
     AddSlider("Cooldown Bar Width", 100, 500, 1, function() return cooline_theme.width end, function(v) cooline_theme.width = v; cooline_settings.theme.width = v end)
     AddSlider("Cooldown Bar Height", 10, 100, 1, function() return cooline_theme.height end, function(v) cooline_theme.height = v; cooline_settings.theme.height = v end)
+    AddSlider("Background Width", 100, 500, 1, function() return cooline_theme.background_width end, function(v) cooline_theme.background_width = v; cooline_settings.theme.background_width = v end)
+    AddSlider("Background Height", 10, 100, 1, function() return cooline_theme.background_height end, function(v) cooline_theme.background_height = v; cooline_settings.theme.background_height = v end)
     AddSlider("X Position", -800, 800, 1, function() return cooline_settings.x end, function(v) cooline_settings.x = v; cooline:SetPoint("CENTER", v, cooline_settings.y) end)
     AddSlider("Y Position", -600, 600, 1, function() return cooline_settings.y end, function(v) cooline_settings.y = v; cooline:SetPoint("CENTER", cooline_settings.x, v) end)
     AddSlider("Font Size", 8, 20, 1, function() return cooline_theme.fontsize end, function(v) cooline_theme.fontsize = v; cooline_settings.theme.fontsize = v end)
@@ -485,6 +535,7 @@ local function CreateConfig()
     AddSlider("Max Cooldown (seconds)", 10, 600, 1, function() return cooline_settings.max_cooldown end, function(v) cooline_settings.max_cooldown = v; cooline_max_cooldown = v end)
     AddSlider("Active Alpha", 0, 1, 0.05, function() return cooline_theme.activealpha end, function(v) cooline_theme.activealpha = v; cooline_settings.theme.activealpha = v end)
     AddSlider("Inactive Alpha", 0, 1, 0.05, function() return cooline_theme.inactivealpha end, function(v) cooline_theme.inactivealpha = v; cooline_settings.theme.inactivealpha = v end)
+    AddSlider("Background Alpha", 0, 1, 0.05, function() return cooline_theme.background_alpha end, function(v) cooline_theme.background_alpha = v; cooline_settings.theme.background_alpha = v end)
 
     AddCheck("Reverse", function() return cooline_theme.reverse end, function(v) cooline_theme.reverse = v; cooline_settings.theme.reverse = v end)
 
@@ -785,8 +836,14 @@ SlashCmdList["COOLINE"] = function(msg)
         cooline_settings.y = default_settings.y
         cooline_settings.min_cooldown = default_settings.min_cooldown
         cooline_settings.max_cooldown = default_settings.max_cooldown
+        cooline_settings.theme.background_width = default_settings.theme.background_width
+        cooline_settings.theme.background_height = default_settings.theme.background_height
+        cooline_settings.theme.background_alpha = default_settings.theme.background_alpha
         cooline_min_cooldown = default_settings.min_cooldown
         cooline_max_cooldown = default_settings.max_cooldown
+        cooline_theme.background_width = default_settings.theme.background_width
+        cooline_theme.background_height = default_settings.theme.background_height
+        cooline_theme.background_alpha = default_settings.theme.background_alpha
         cooline:ClearAllPoints()
         cooline:SetPoint("CENTER", cooline_settings.x, cooline_settings.y)
         cooline:InitUI()
