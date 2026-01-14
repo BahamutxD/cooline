@@ -82,7 +82,7 @@ function cooline.detect_cooldowns()
         frame:SetWidth(cooline.icon_size)
         frame:SetHeight(cooline.icon_size)
         frame.icon:SetTexture(texture)
-        frame:SetBackdropColor(0, 0, 0, 1) -- Black border for all icons
+        frame:SetBackdropColor(1, 1, 1, 1) -- White border for all icons
         frame:SetAlpha((end_time - GetTime() > cooline_max_cooldown) and 0.6 or 1)
         frame.end_time = end_time
         -- Only show frame if in combat
@@ -182,7 +182,15 @@ end
 
 function cooline.cooldown_frame()
     local frame = CreateFrame('Frame', nil, cooline)
-    frame:SetBackdrop({ bgFile=[[Interface\\AddOns\\cooline\\assets\\backdrop.tga]] })
+    frame:SetBackdrop({
+        bgFile = [[Interface\Buttons\WHITE8x8]],
+        edgeFile = [[Interface\Buttons\WHITE8x8]],
+        tile = false,
+        tileSize = 0,
+        edgeSize = 1,
+        insets = { left = 0, right = 0, top = 0, bottom = 0 }
+    })
+    frame:SetBackdropBorderColor(0, 0, 0, 1) -- Black border
     frame.icon = frame:CreateTexture(nil, 'ARTWORK')
     frame.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
     frame.icon:SetPoint('TOPLEFT', 1, -1)
@@ -354,6 +362,9 @@ function cooline:InitUI()
     self:SetPoint('CENTER', x, y)
     self:SetClampedToScreen(true)
     
+    -- Enable mouse click-through when not dragging
+    self:EnableMouse(false)
+    
     self.bg:SetTexture(nil) -- Remove background texture entirely
     self.bg:SetAlpha(0) -- Extra transparency fallback
     self.bg:SetVertexColor(unpack(cooline_theme.bgcolor))
@@ -401,23 +412,51 @@ function cooline:InitUI()
     self.detect_cooldowns()
 end
 
+local function CreateBorderedEditBox(name, parent, width, height)
+    local editBox = CreateFrame("EditBox", name, parent)
+    editBox:SetWidth(width)
+    editBox:SetHeight(height)
+    editBox:SetAutoFocus(false)
+    
+    -- Set up edit box properties
+    editBox:SetFontObject("GameFontNormalSmall")
+    editBox:SetJustifyH("CENTER")
+    editBox:SetTextInsets(2, 2, 0, 0)
+    
+    -- Create background with thin white border using backdrop
+    editBox:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true, tileSize = 16,
+        edgeSize = 16,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 }
+    })
+    editBox:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
+    editBox:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
+    
+    return editBox
+end
+
 local function CreateConfig()
     local config = CreateFrame("Frame", "CoolineConfig", UIParent)
     if not config then
         return
     end
 
-    config:SetWidth(450)
+    config:SetWidth(400)
     config:SetHeight(700)
     config:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+    
+    -- Use the same backdrop as SP_SwingTimer
     config:SetBackdrop({
-        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
-        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-        tile = true,
-        tileSize = 32,
-        edgeSize = 32,
-        insets = { left = 11, right = 12, top = 12, bottom = 11 }
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        tile = true, tileSize = 16,
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 16,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 }
     })
+    config:SetBackdropColor(0, 0, 0, 1)
+    
     config:SetMovable(true)
     config:EnableMouse(true)
     config:RegisterForDrag("LeftButton")
@@ -434,85 +473,76 @@ local function CreateConfig()
     local yOffset = -50
 
     local function AddSlider(name, minVal, maxVal, step, getFunc, setFunc)
-        slider_counter = slider_counter + 1
-        local slider = CreateFrame("Slider", "CoolineConfigSlider_" .. slider_counter, config, "OptionsSliderTemplate")
-        if not slider then
-            return
-        end
-        slider:SetWidth(200)
-        slider:SetPoint("TOP", 0, yOffset)
-        slider:SetMinMaxValues(minVal, maxVal)
-        slider:SetValueStep(step)
-        slider:SetValue(getFunc())
-        local sliderName = slider:GetName()
-        getglobal(sliderName .. "Text"):SetText(name)
-        getglobal(sliderName .. "Low"):SetText(tostring(minVal))
-        getglobal(sliderName .. "High"):SetText(tostring(maxVal))
+    slider_counter = slider_counter + 1
+    local slider = CreateFrame("Slider", "CoolineConfigSlider_" .. slider_counter, config, "OptionsSliderTemplate")
+    if not slider then
+        return
+    end
+    slider:SetWidth(300)
+    slider:SetPoint("TOPLEFT", 20, yOffset)
+    slider:SetMinMaxValues(minVal, maxVal)
+    slider:SetValueStep(step)
+    slider:SetValue(getFunc())
+    local sliderName = slider:GetName()
+    getglobal(sliderName .. "Text"):SetText(name)
+    getglobal(sliderName .. "Low"):SetText(tostring(minVal))
+    getglobal(sliderName .. "High"):SetText(tostring(maxVal))
 
-        -- Add value display
-        local valueText = config:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        valueText:SetPoint("LEFT", slider, "RIGHT", 5, 0)
-        local allowsDecimal = name == "Min Cooldown (seconds)" or name == "Active Alpha" or name == "Inactive Alpha" or name == "Background Alpha"
-        valueText:SetText(string.format(allowsDecimal and "%.2f" or "%d", getFunc()))
+    -- Add bordered input box
+    local inputBox = CreateBorderedEditBox("CoolineConfigSliderInput_" .. slider_counter, config, 50, 20)
+    inputBox:SetPoint("TOP", slider, "TOP", 0, 0)
+    inputBox:SetPoint("RIGHT", config, "RIGHT", -20, 0)
+    local allowsDecimal = name == "Min Cooldown (seconds)" or name == "Active Alpha" or name == "Inactive Alpha" or name == "Background Alpha"
+    inputBox:SetText(string.format(allowsDecimal and "%.2f" or "%d", getFunc()))
 
-        -- Add input box
-        local inputBox = CreateFrame("EditBox", "CoolineConfigSliderInput_" .. slider_counter, config, "InputBoxTemplate")
-        inputBox:SetPoint("LEFT", valueText, "RIGHT", 5, 0)
-        inputBox:SetWidth(50)
-        inputBox:SetHeight(20)
-        inputBox:SetAutoFocus(false)
-        inputBox:SetText(string.format(allowsDecimal and "%.2f" or "%d", getFunc()))
+    -- Determine if negative values are allowed
+    local allowsNegative = name == "X Position" or name == "Y Position" or name == "Icon Size"
 
-        -- Determine if negative values are allowed
-        local allowsNegative = name == "X Position" or name == "Y Position" or name == "Icon Size"
+    -- Sync slider and input box
+    slider:SetScript("OnValueChanged", function()
+        local value = this:GetValue()
+        setFunc(value)
+        inputBox:SetText(string.format(allowsDecimal and "%.2f" or "%d", value))
+        cooline:InitUI()
+    end)
 
-        -- Sync slider and input box
-        slider:SetScript("OnValueChanged", function()
-            local value = this:GetValue()
-            setFunc(value)
-            valueText:SetText(string.format(allowsDecimal and "%.2f" or "%d", value))
-            inputBox:SetText(string.format(allowsDecimal and "%.2f" or "%d", value))
-            cooline:InitUI()
-        end)
-
-        inputBox:SetScript("OnEnterPressed", function()
-            local text = this:GetText()
-            local value = tonumber(text)
-            if value then
-                -- Clamp value to min/max
-                value = math.max(minVal, math.min(maxVal, value))
-                -- Round to two decimal places for decimal sliders
-                if allowsDecimal then
-                    value = math.floor(value * 100 + 0.5) / 100
-                else
-                    value = math.floor(value + 0.5) -- Round to nearest integer
-                end
-                -- Ensure non-negative for sliders that don't allow negatives
-                if not allowsNegative and value < 0 then
-                    value = minVal
-                end
-                slider:SetValue(value)
-                setFunc(value)
-                valueText:SetText(string.format(allowsDecimal and "%.2f" or "%d", value))
-                this:SetText(string.format(allowsDecimal and "%.2f" or "%d", value))
-                cooline:InitUI()
+    inputBox:SetScript("OnEnterPressed", function()
+        local text = this:GetText()
+        local value = tonumber(text)
+        if value then
+            -- Clamp value to min/max
+            value = math.max(minVal, math.min(maxVal, value))
+            -- Round to two decimal places for decimal sliders
+            if allowsDecimal then
+                value = math.floor(value * 100 + 0.5) / 100
             else
-                -- Invalid input, revert to current value
-                local currentValue = getFunc()
-                this:SetText(string.format(allowsDecimal and "%.2f" or "%d", currentValue))
+                value = math.floor(value + 0.5)
             end
-            this:ClearFocus()
-        end)
-
-        inputBox:SetScript("OnEscapePressed", function()
+            -- Ensure non-negative for sliders that don't allow negatives
+            if not allowsNegative and value < 0 then
+                value = minVal
+            end
+            slider:SetValue(value)
+            setFunc(value)
+            this:SetText(string.format(allowsDecimal and "%.2f" or "%d", value))
+            cooline:InitUI()
+        else
+            -- Invalid input, revert to current value
             local currentValue = getFunc()
             this:SetText(string.format(allowsDecimal and "%.2f" or "%d", currentValue))
-            this:ClearFocus()
-        end)
+        end
+        this:ClearFocus()
+    end)
 
-        yOffset = yOffset - 35
-        return slider
-    end
+    inputBox:SetScript("OnEscapePressed", function()
+        local currentValue = getFunc()
+        this:SetText(string.format(allowsDecimal and "%.2f" or "%d", currentValue))
+        this:ClearFocus()
+    end)
+
+    yOffset = yOffset - 35
+    return slider
+end
 
     local function AddCheck(name, getFunc, setFunc)
         check_counter = check_counter + 1
@@ -532,12 +562,15 @@ local function CreateConfig()
         return check
     end
 
+    -- Reordered: X and Y positions first
+    AddSlider("X Position", -800, 800, 1, function() return cooline_settings.x end, function(v) cooline_settings.x = v; cooline:SetPoint("CENTER", v, cooline_settings.y) end)
+    AddSlider("Y Position", -600, 600, 1, function() return cooline_settings.y end, function(v) cooline_settings.y = v; cooline:SetPoint("CENTER", cooline_settings.x, v) end)
+    
+    -- Then other sliders
     AddSlider("Cooldown Bar Width", 100, 500, 1, function() return cooline_theme.width end, function(v) cooline_theme.width = v; cooline_settings.theme.width = v end)
     AddSlider("Cooldown Bar Height", 10, 100, 1, function() return cooline_theme.height end, function(v) cooline_theme.height = v; cooline_settings.theme.height = v end)
     AddSlider("Background Width", 100, 500, 1, function() return cooline_theme.background_width end, function(v) cooline_theme.background_width = v; cooline_settings.theme.background_width = v end)
     AddSlider("Background Height", 10, 100, 1, function() return cooline_theme.background_height end, function(v) cooline_theme.background_height = v; cooline_settings.theme.background_height = v end)
-    AddSlider("X Position", -800, 800, 1, function() return cooline_settings.x end, function(v) cooline_settings.x = v; cooline:SetPoint("CENTER", v, cooline_settings.y) end)
-    AddSlider("Y Position", -600, 600, 1, function() return cooline_settings.y end, function(v) cooline_settings.y = v; cooline:SetPoint("CENTER", cooline_settings.x, v) end)
     AddSlider("Font Size", 8, 20, 1, function() return cooline_theme.fontsize end, function(v) cooline_theme.fontsize = v; cooline_settings.theme.fontsize = v end)
     AddSlider("Icon Size", -5, 5, 1, function() return cooline_theme.iconoutset end, function(v) cooline_theme.iconoutset = v; cooline_settings.theme.iconoutset = v end)
     AddSlider("Min Cooldown (seconds)", 0, 10, 0.5, function() return cooline_settings.min_cooldown end, function(v) cooline_settings.min_cooldown = v; cooline_min_cooldown = v end)
@@ -554,11 +587,9 @@ local function CreateConfig()
 
     yOffset = yOffset - 20
 
-    local ignoreEdit = CreateFrame("EditBox", nil, config, "InputBoxTemplate")
+    -- Create bordered edit box for ignore list
+    local ignoreEdit = CreateBorderedEditBox(nil, config, 360, 25)
     ignoreEdit:SetPoint("TOPLEFT", 20, yOffset)
-    ignoreEdit:SetWidth(300)
-    ignoreEdit:SetHeight(25)
-    ignoreEdit:SetAutoFocus(false)
     ignoreEdit:SetScript("OnShow", function()
         this:SetText("")
     end)
@@ -567,7 +598,7 @@ local function CreateConfig()
 
     local ignoreButton = CreateFrame("Button", nil, config, "UIPanelButtonTemplate")
     ignoreButton:SetPoint("TOPLEFT", 20, yOffset)
-    ignoreButton:SetWidth(60)
+    ignoreButton:SetWidth(80)
     ignoreButton:SetHeight(25)
     ignoreButton:SetText("Ignore")
     ignoreButton:SetScript("OnClick", function()
@@ -598,8 +629,8 @@ local function CreateConfig()
     end)
 
     local unignoreButton = CreateFrame("Button", nil, config, "UIPanelButtonTemplate")
-    unignoreButton:SetPoint("LEFT", ignoreButton, "RIGHT", 5, 0)
-    unignoreButton:SetWidth(60)
+    unignoreButton:SetPoint("LEFT", ignoreButton, "RIGHT", 10, 0)
+    unignoreButton:SetWidth(80)
     unignoreButton:SetHeight(25)
     unignoreButton:SetText("Unignore")
     unignoreButton:SetScript("OnClick", function()
@@ -641,7 +672,7 @@ local function CreateConfig()
 
     local currentIgnoredText = config:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     currentIgnoredText:SetPoint("TOPLEFT", 20, yOffset)
-    currentIgnoredText:SetWidth(300)
+    currentIgnoredText:SetWidth(360)
     currentIgnoredText:SetJustifyH("LEFT")
     currentIgnoredText:SetText(table.concat(cooline_ignore_list, ", "))
     config.currentIgnoredText = currentIgnoredText
@@ -728,10 +759,12 @@ function cooline.VARIABLES_LOADED()
         local ux, uy = UIParent:GetCenter()
         cooline_settings.x, cooline_settings.y = floor(x - ux + 0.5), floor(y - uy + 0.5)
         this.dragging = false
+        this:EnableMouse(false) -- Disable mouse after dragging
     end
     
     cooline:SetScript('OnDragStart', function()
         this.dragging = true
+        this:EnableMouse(true) -- Temporarily enable mouse for dragging
         this:StartMoving()
     end)
     
@@ -770,6 +803,7 @@ function cooline.VARIABLES_LOADED()
     minimapButton:SetHeight(33)
     minimapButton:SetFrameLevel(8)
     minimapButton:EnableMouse(true)
+	minimapButton:SetMovable(true)
     minimapButton:RegisterForDrag("LeftButton")
 
     minimapButton:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight", "ADD")
